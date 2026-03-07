@@ -3,14 +3,14 @@ local ui = {}
 function ui.new(title, items)
     local menu = {
         title = title or "Menu",
-        items = items,
+        items = items or {},
         selected = 1,
-        offset = 0, -- Track scrolling
+        offset = 0,
         running = true
     }
 
     local w, h = term.getSize()
-    local maxDisplay = h - 6 -- Reserve space for Title and Header
+    local maxDisplay = h - 6 
 
     function menu:draw()
         term.clear()
@@ -21,16 +21,22 @@ function ui.new(title, items)
         term.setCursorPos(math.floor((w - #titleDisplay) / 2) + 1, 2)
         term.write(titleDisplay)
         
-        -- Calculate Scroll Offset
-        -- If selection moves past the bottom of the window, scroll down
-        if self.selected > self.offset + maxDisplay then
+        -- SCROLLING LOGIC FIX:
+        -- 1. Handle looping back to top
+        if self.selected == 1 then
+            self.offset = 0
+        -- 2. Handle looping back to bottom
+        elseif self.selected == #self.items and #self.items > maxDisplay then
+            self.offset = #self.items - maxDisplay
+        -- 3. Standard scroll down
+        elseif self.selected > self.offset + maxDisplay then
             self.offset = self.selected - maxDisplay
-        -- If selection moves above the top of the window, scroll up
+        -- 4. Standard scroll up
         elseif self.selected <= self.offset then
             self.offset = self.selected - 1
         end
 
-        -- Draw Items within the window
+        -- Draw Items
         for i = 1, maxDisplay do
             local itemIdx = i + self.offset
             local item = self.items[itemIdx]
@@ -39,6 +45,7 @@ function ui.new(title, items)
                 local y = 4 + i
                 local isSelected = (itemIdx == self.selected)
                 
+                -- Note: Ensure the spaces in "[  ]" match your preference
                 local display = isSelected and "[  " .. item.text .. "  ]" or item.text
                 local x = math.floor((w - #display) / 2) + 1
                 
@@ -48,7 +55,7 @@ function ui.new(title, items)
             end
         end
         
-        -- Draw Scroll Indicators if needed
+        -- Indicators
         term.setTextColor(colors.orange)
         if self.offset > 0 then
             term.setCursorPos(w, 5)
@@ -71,16 +78,17 @@ function ui.new(title, items)
                 self.selected = self.selected < #self.items and self.selected + 1 or 1
             elseif key == keys.enter then
                 local item = self.items[self.selected]
-            if item and type(item.handler) == "function" then
-                term.clear()
-                term.setCursorPos(1, 1)
-                item.handler() -- This is the call that was failing
-                self.running = false
-            else
-                -- Optional: Sound a beep or print a warning if handler is missing
-                os.queueEvent("fake_event") -- Just to keep the loop alive
-            end
-            elseif key == keys.q then -- Added a 'quit' shortcut
+                -- SAFETY CHECK: Ensure item and handler exist
+                if item and type(item.handler) == "function" then
+                    term.clear()
+                    term.setCursorPos(1, 1)
+                    item.handler()
+                    self.running = false
+                else
+                    -- If no handler, just exit the menu or ignore
+                    self.running = false
+                end
+            elseif key == keys.q then
                 self.running = false
             end
         end
