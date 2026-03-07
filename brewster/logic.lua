@@ -1,19 +1,14 @@
 local logic = {}
 local cachedTotals = {}
 
--- 1. IDENTIFICATION: Verified Strings from inspect.lua
 function logic.getPotionType(detail)
     if not detail or detail.name ~= "minecraft:potion" then return "not_a_potion" end
     local name = detail.displayName or ""
-    
-    -- Exact matches based on your inspection
     if name == "Water Bottle" then return "water" end
     if name == "Awkward Potion" then return "awkward" end
-    
     return "final_potion"
 end
 
--- 2. RESET: Clear Stand and Turtle completely
 function logic.purgeStand(stand, tName, chest)
     for s = 1, 5 do stand.pushItems(tName, s, 64) end
     for i = 1, 16 do
@@ -24,12 +19,10 @@ function logic.purgeStand(stand, tName, chest)
     end
 end
 
--- 3. SNAPSHOT: Deep-scan for UI Counts
 function logic.updateSnapshot(chest)
     local success, inventory = pcall(chest.list)
     if not success then return {}, {} end
     local totals, water, awkward = {}, 0, 0
-    
     for slot, item in pairs(inventory) do
         totals[item.name] = (totals[item.name] or 0) + item.count
         if item.name == "minecraft:potion" then
@@ -39,7 +32,6 @@ function logic.updateSnapshot(chest)
             elseif pType == "awkward" then awkward = awkward + item.count end
         end
     end
-    
     cachedTotals = totals
     cachedTotals["_water"] = water
     cachedTotals["_awkward"] = awkward
@@ -48,7 +40,6 @@ end
 
 function logic.getStock(itemName) return cachedTotals[itemName] or 0 end
 
--- 4. SEARCH: The "Zero-Latency" Search
 function logic.findInChest(chest, itemName, reqType)
     local success, inv = pcall(chest.list)
     if not success then return nil end
@@ -78,11 +69,8 @@ function logic.calculateMaxBrews(potionName, recipes)
     if potionName == "awkward" then return 0 end
     local plan = logic.getBrewingPlan(potionName, recipes)
     if not plan or #plan == 0 then return 0 end
-    
-    -- Math: (Water + Empty + Awkward) / 3
     local startBottles = logic.getStock("_water") + logic.getStock("minecraft:glass_bottle") + logic.getStock("_awkward")
     local m = math.floor(startBottles / 3)
-    
     for _, step in ipairs(plan) do
         if not (step.name == "minecraft:nether_wart" and logic.getStock("_awkward") >= 3) then
             m = math.min(m, logic.getStock(step.name))
@@ -91,8 +79,9 @@ function logic.calculateMaxBrews(potionName, recipes)
     return m
 end
 
--- MAINTENANCE UTILS
+-- FIX: Added a limit of 20 to prevent chest flooding
 function logic.fillWaterBottles(chest, tName)
+    if logic.getStock("_water") >= 20 then return end -- STOP if we have enough
     local empty = logic.findInChest(chest, "minecraft:glass_bottle")
     if empty then
         chest.pushItems(tName, empty, 16, 1)
@@ -114,6 +103,17 @@ function logic.craftBlazePowder(chest, tName)
     if rSlot then
         chest.pushItems(tName, rSlot, 1, 1)
         turtle.select(1)
+        return turtle.craft()
+    end
+end
+
+-- FIX: Ensure this is correctly exported
+function logic.craftBottles(chest, tName)
+    local gSlot = logic.findInChest(chest, "minecraft:glass")
+    if gSlot and logic.getStock("minecraft:glass") >= 3 then
+        chest.pushItems(tName, gSlot, 1, 1)
+        chest.pushItems(tName, gSlot, 1, 3)
+        chest.pushItems(tName, gSlot, 1, 6)
         return turtle.craft()
     end
 end
