@@ -52,13 +52,14 @@ local function executeBrew(name, amt, silent)
         
         for s = 1, 3 do stand.pushItems(tName, s, 1) end
         
-        -- If it's awkward or the turtle is full, put it in the chest
-        if name == "awkward" or turtle.getItemCount(16) > 0 then
-            for i = 1, 16 do 
-                if turtle.getItemCount(i) > 0 then chest.pullItems(tName, i) end 
-            end
+        -- IF AUTO-STOCKING AWKWARD: Clean up the inventory immediately
+        if name == "awkward" then
+            logic.cleanupInventory(chest, tName, recipes)
         else
-            if not silent then 
+            -- IF PLAYER ORDER: Only store if turtle is critically full (Slot 16)
+            if turtle.getItemCount(16) > 0 then
+                logic.cleanupInventory(chest, tName, recipes)
+            elseif not silent then 
                 term.setTextColor(colors.green)
                 print("Order Ready!") 
                 term.setTextColor(colors.white)
@@ -68,21 +69,6 @@ local function executeBrew(name, amt, silent)
     
     isBrewing = false
     if not silent then mainMenu() end
-end
-
-local function brewQuantityMenu(name)
-    local max = logic.calculateMaxBrews(name, recipes)
-    local items = {
-        { text = "START", handler = function()
-            term.clear()
-            term.setCursorPos(1, 2)
-            print("Qty (Max " .. max .. "):")
-            local q = tonumber(read())
-            if q and q > 0 and q <= max then executeBrew(name, q) else mainMenu() end
-        end},
-        { text = "BACK", handler = function() craftableMenu() end }
-    }
-    ui.new(name:upper(), items):run()
 end
 
 function craftableMenu()
@@ -95,7 +81,18 @@ function craftableMenu()
         if m > 0 then
             table.insert(items, { 
                 text = n:upper() .. " (" .. m .. ")", 
-                handler = function() brewQuantityMenu(n) end 
+                handler = function() 
+                    local max = logic.calculateMaxBrews(n, recipes)
+                    ui.new(n:upper(), {
+                        { text = "START", handler = function()
+                            term.clear()
+                            print("Qty:")
+                            local q = tonumber(read())
+                            if q and q > 0 and q <= max then executeBrew(n, q) else mainMenu() end
+                        end},
+                        { text = "BACK", handler = function() craftableMenu() end }
+                    }):run()
+                end 
             })
         end
     end
@@ -173,34 +170,8 @@ local function backgroundWorker()
             if logic.getStock("minecraft:blaze_powder") < 5 then logic.craftBlazePowder(chest, tName) end
             if logic.getStock("minecraft:glass_bottle") < 6 then logic.craftBottles(chest, tName) end
             
-            local k = {["minecraft:glass_bottle"]=true, ["minecraft:blaze_powder"]=true, ["minecraft:nether_wart"]=true, ["minecraft:glass"]=true, ["minecraft:blaze_rod"]=true}
-            for _, r in pairs(recipes) do k[r.ingredient] = true end
-            
-            for i = 1, 16 do
-                local itm = turtle.getItemDetail(i)
-                if itm then
-                    local pType = logic.getPotionType(itm)
-                    
-                    -- RULE 1: If it's a keeper (Glass, Blaze, etc.), store it.
-                    if k[itm.name] then
-                        turtle.select(i)
-                        chest.pullItems(tName, i)
-                        
-                    -- RULE 2: If it's a potion, ONLY store if it's "Awkward Potion".
-                    elseif itm.name == "minecraft:potion" then
-                        if pType == "awkward" then
-                            turtle.select(i)
-                            chest.pullItems(tName, i)
-                        end
-                        -- If it's ANY other potion, the loop just SKIPS it.
-                        
-                    -- RULE 3: If it's anything else, toss it.
-                    else
-                        turtle.select(i)
-                        turtle.dropDown()
-                    end
-                end
-            end
+            -- NOTICE: The inventory sorting loop has been REMOVED from here.
+            -- It now only happens inside executeBrew() for Awkward potions.
         end
         os.sleep(5)
     end
