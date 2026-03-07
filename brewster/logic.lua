@@ -12,17 +12,15 @@ end
 function logic.purgeStand(stand, tName, chest)
     for s = 1, 5 do stand.pushItems(tName, s, 64) end
     for i = 1, 16 do
-        if turtle.getItemCount(i) > 0 then
-            local d = turtle.getItemDetail(i)
-            if d and logic.getPotionType(d) == "awkward" then
-                turtle.select(i)
-                chest.pullItems(tName, i)
-            end
+        local d = turtle.getItemDetail(i)
+        if d and logic.getPotionType(d) == "awkward" then
+            turtle.select(i)
+            chest.pullItems(tName, i)
         end
     end
 end
 
--- NEW: Explicit cleanup for non-potion utility items
+-- NEW: Targeted Cleanup (Background Safe)
 function logic.cleanupInventory(chest, tName, recipes)
     local k = {["minecraft:glass_bottle"]=true, ["minecraft:blaze_powder"]=true, ["minecraft:nether_wart"]=true, ["minecraft:glass"]=true, ["minecraft:blaze_rod"]=true}
     for _, r in pairs(recipes) do k[r.ingredient] = true end
@@ -31,16 +29,16 @@ function logic.cleanupInventory(chest, tName, recipes)
         local itm = turtle.getItemDetail(i)
         if itm then
             local pType = logic.getPotionType(itm)
-            -- ONLY move if it's an ingredient or an Awkward potion
+            -- MOVE IF: Utility item OR specifically an Awkward potion
             if k[itm.name] or pType == "awkward" then
                 turtle.select(i)
                 chest.pullItems(tName, i)
-            elseif pType == "not_a_potion" then
-                -- Toss actual junk (dirt, cobble, etc)
+            -- REJECT IF: Pure junk (Not a potion and not a keeper)
+            elseif pType == "not_a_potion" and not k[itm.name] then
                 turtle.select(i)
                 turtle.dropDown()
             end
-            -- Final Potions are IGNORRED and stay in the turtle
+            -- FINAL POTIONS (Strength, Invis, etc) are strictly IGNORED
         end
     end
 end
