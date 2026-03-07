@@ -1,7 +1,6 @@
 local logic = {}
 local cachedTotals = {}
 
--- 1. IDENTIFICATION (Strict String Matching)
 function logic.getPotionType(detail)
     if not detail or detail.name ~= "minecraft:potion" then return "not_a_potion" end
     local name = detail.displayName or ""
@@ -10,7 +9,6 @@ function logic.getPotionType(detail)
     return "final_potion"
 end
 
--- 2. RESET (Purge Stand/Turtle)
 function logic.purgeStand(stand, tName, chest)
     for s = 1, 5 do stand.pushItems(tName, s, 64) end
     for i = 1, 16 do
@@ -21,7 +19,6 @@ function logic.purgeStand(stand, tName, chest)
     end
 end
 
--- 3. SNAPSHOT (Deep-Scan Cache)
 function logic.updateSnapshot(chest)
     local success, inventory = pcall(chest.list)
     if not success then return {}, {} end
@@ -43,7 +40,6 @@ end
 
 function logic.getStock(itemName) return cachedTotals[itemName] or 0 end
 
--- 4. SEARCH (Identity Specific)
 function logic.findInChest(chest, itemName, reqType)
     local success, inv = pcall(chest.list)
     if not success then return nil end
@@ -58,7 +54,6 @@ function logic.findInChest(chest, itemName, reqType)
     return nil
 end
 
--- 5. BREWING LOGIC
 function logic.getBrewingPlan(potionName, recipes)
     local plan, current = {}, potionName
     while current ~= "minecraft:water" do
@@ -84,7 +79,59 @@ function logic.calculateMaxBrews(potionName, recipes)
     return m
 end
 
--- 6. MAINTENANCE (Limit of 20 Water Bottles)
+function logic.displayStatus(mon, recipes)
+    if not mon then return end
+    mon.clear()
+    local w, h = mon.getSize()
+    local mid = math.floor(w / 2)
+
+    -- Headers
+    mon.setCursorPos(1, 1)
+    mon.setTextColor(colors.yellow)
+    mon.write("STOCK")
+    mon.setCursorPos(mid + 2, 1)
+    mon.write("MISSING")
+    
+    -- Draw Vertical Divider
+    mon.setTextColor(colors.gray)
+    for y = 1, h do
+        mon.setCursorPos(mid + 1, y)
+        mon.write("|")
+    end
+
+    -- Left Column: Essential Stock
+    mon.setTextColor(colors.white)
+    local essentials = {
+        ["Water"] = "_water",
+        ["Awkward"] = "_awkward",
+        ["Fuel"] = "minecraft:blaze_powder",
+        ["Glass"] = "minecraft:glass",
+        ["Wart"] = "minecraft:nether_wart"
+    }
+    local y = 3
+    for label, key in pairs(essentials) do
+        mon.setCursorPos(2, y)
+        mon.write(label .. ": " .. logic.getStock(key))
+        y = y + 1
+    end
+
+    -- Right Column: Out of Stock Ingredients
+    mon.setTextColor(colors.red)
+    y = 3
+    local seen = {}
+    for _, r in pairs(recipes) do
+        if not seen[r.ingredient] and logic.getStock(r.ingredient) == 0 then
+            if y < h then
+                mon.setCursorPos(mid + 3, y)
+                local shortName = r.ingredient:gsub("minecraft:", "")
+                mon.write("- " .. shortName:sub(1, mid - 4))
+                y = y + 1
+                seen[r.ingredient] = true
+            end
+        end
+    end
+end
+
 function logic.fillWaterBottles(chest, tName)
     if logic.getStock("_water") >= 20 then return end 
     local empty = logic.findInChest(chest, "minecraft:glass_bottle")
