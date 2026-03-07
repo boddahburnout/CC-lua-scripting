@@ -1,21 +1,17 @@
 local logic = {}
 local cachedTotals = {}
 
--- Helper to identify Potion type via NBT/Components
 function logic.getPotionType(detail)
     if not detail or detail.name ~= "minecraft:potion" then return "not_a_potion" end
     local p = (detail.components and detail.components["minecraft:potion_contents"] and detail.components["minecraft:potion_contents"].type) or
               (detail.nbt and detail.nbt.Potion)
-    return p or "minecraft:water" -- Default to water if no tag exists
+    return p or "minecraft:water"
 end
 
--- Update internal memory of chest contents
 function logic.updateSnapshot(chest)
     local success, inventory = pcall(chest.list)
     if not success then return {}, {} end
-    local totals = {}
-    local realWater = 0
-    local awkward = 0
+    local totals, realWater, awkward = {}, 0, 0
     for slot, item in pairs(inventory) do
         totals[item.name] = (totals[item.name] or 0) + item.count
         if item.name == "minecraft:potion" then
@@ -58,12 +54,20 @@ function logic.getBrewingPlan(potionName, recipes)
 end
 
 function logic.calculateMaxBrews(potionName, recipes)
+    if potionName == "awkward" then return 0 end -- Hide from UI
     local plan = logic.getBrewingPlan(potionName, recipes)
     if not plan or #plan == 0 then return 0 end
-    -- INSTANT calculation using cached counts
-    local startBottles = logic.getStock("_water") + logic.getStock("minecraft:glass_bottle")
+    
+    -- Total starts = (Water + Empty Bottles + Existing Awkward)
+    local startBottles = logic.getStock("_water") + logic.getStock("minecraft:glass_bottle") + logic.getStock("_awkward")
     local m = math.floor(startBottles / 3)
-    for _, step in ipairs(plan) do m = math.min(m, logic.getStock(step.name)) end
+    
+    for _, step in ipairs(plan) do
+        -- Skip Nether Wart check if we have pre-brewed Awkward potions
+        if not (step.name == "minecraft:nether_wart" and logic.getStock("_awkward") >= 3) then
+            m = math.min(m, logic.getStock(step.name))
+        end
+    end
     return m
 end
 
@@ -79,8 +83,8 @@ end
 function logic.manageFuel(chest, stand)
     local p = logic.findInChest(chest, "minecraft:blaze_powder")
     if p then
-        local fuel = stand.getItemDetail(5)
-        if not fuel or fuel.count < 10 then chest.pushItems(peripheral.getName(stand), p, 5, 5) end
+        local f = stand.getItemDetail(5)
+        if not f or f.count < 10 then chest.pushItems(peripheral.getName(stand), p, 5, 5) end
     end
 end
 
