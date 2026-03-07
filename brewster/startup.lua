@@ -52,18 +52,13 @@ local function executeBrew(name, amt, silent)
         
         for s = 1, 3 do stand.pushItems(tName, s, 1) end
         
-        -- IF AUTO-STOCKING AWKWARD: Clean up the inventory immediately
-        if name == "awkward" then
-            logic.cleanupInventory(chest, tName, recipes)
-        else
-            -- IF PLAYER ORDER: Only store if turtle is critically full (Slot 16)
-            if turtle.getItemCount(16) > 0 then
-                logic.cleanupInventory(chest, tName, recipes)
-            elseif not silent then 
-                term.setTextColor(colors.green)
-                print("Order Ready!") 
-                term.setTextColor(colors.white)
-            end
+        -- Always try to cleanup after a batch finishes
+        logic.cleanupInventory(chest, tName, recipes)
+        
+        if name ~= "awkward" and not silent then
+            term.setTextColor(colors.green)
+            print("Batch Ready!")
+            term.setTextColor(colors.white)
         end
     end
     
@@ -170,8 +165,8 @@ local function backgroundWorker()
             if logic.getStock("minecraft:blaze_powder") < 5 then logic.craftBlazePowder(chest, tName) end
             if logic.getStock("minecraft:glass_bottle") < 6 then logic.craftBottles(chest, tName) end
             
-            -- NOTICE: The inventory sorting loop has been REMOVED from here.
-            -- It now only happens inside executeBrew() for Awkward potions.
+            -- SAFE BACKGROUND CLEANUP: Only moves utilities and Awkward potions
+            logic.cleanupInventory(chest, tName, recipes)
         end
         os.sleep(5)
     end
