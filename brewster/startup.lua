@@ -4,55 +4,107 @@ local ui = require("ui")
 
 local chest = peripheral.find("minecraft:chest")
 local stand = peripheral.find("minecraft:brewing_stand")
-local tName = os.getComputerLabel() or "turtle"
+local modem = peripheral.find("modem")
+local tName = modem and modem.getNameLocal() or "turtle"
 local isBrewing = false
 
--- Forward declarations for recursive menus
+-- Forward declaration so sub-menus can return to main
 local mainMenu
 
 -----------------------------------------------------------
--- 1. BREW SUB-MENU
+-- CORE ENGINE: The Brewing Process
+-----------------------------------------------------------
+local function executeBrew(name, amt)
+    isBrewing = true
+    local plan = logic.getBrewingPlan(name, recipes)
+    
+    for b = 1, amt do
+        term.clear()
+        term.setCursorPos(1, 2)
+        term.setTextColor(colors.yellow)
+        print("-- BREWING: " .. name:upper() .. " --")
+        term.setTextColor(colors.white)
+        print("Batch " .. b .. " of " .. amt)
+        
+        -- 1. Load Water (Slots 1, 2, 3)
+        for s = 1, 3 do 
+            local wSlot = logic.findInChest(chest, "minecraft:potion", "minecraft:water")
+            if wSlot then chest.pushItems(peripheral.getName(stand), wSlot, 1, s) end
+        end
+        
+        -- 2. Add Ingredients (Slot 4)
+        for _, step in ipairs(plan) do
+            local ing = logic.findInChest(chest, step.name)
+            if ing then 
+                print(" + Adding " .. step.name)
+                chest.pushItems(peripheral.getName(stand), ing, 1, 4)
+                os.sleep(22)
+            end
+        end
+        
+        -- 3. Clear Stand
+        for s = 1, 3 do stand.pushItems(tName, s, 1) end
+        
+        print("\nBatch Complete. Empty Turtle Slot 1.")
+        while turtle.getItemCount() > 0 do os.sleep(1) end
+    end
+    isBrewing = false
+    mainMenu()
+end
+
+-----------------------------------------------------------
+-- SUB-MENU: Brewing & Quantity
 -----------------------------------------------------------
 local function brewQuantityMenu(name)
     local max = logic.calculateMaxBrews(name, recipes)
     local items = {
-        { text = "Confirm Brew", handler = function()
+        { text = "START BREW", handler = function()
             term.clear()
-            term.setCursorPos(1,1)
-            print("How many batches? (Max: "..max..")")
+            term.setCursorPos(1, 2)
+            print("Enter batch quantity (Max " .. max .. "):")
             local qty = tonumber(read())
             if qty and qty > 0 and qty <= max then
                 executeBrew(name, qty)
             else
-                print("Invalid amount.")
+                print("Invalid quantity.")
                 os.sleep(1)
+                mainMenu()
             end
         end},
-        { text = "Back", handler = function() mainMenu() end }
+        { text = "BACK", handler = mainMenu }
     }
-    ui.new(name:upper() .. " (Max: " .. max .. ")", items):run()
+    ui.new(name:upper() .. " (MAX: " .. max .. ")", items):run()
 end
 
 local function craftableMenu()
     local items = {}
-    for name, _ in pairs(recipes) do
+    -- Sort recipes alphabetically for the menu
+    local names = {}
+    for n in pairs(recipes) do table.insert(names, n) end
+    table.sort(names)
+
+    for _, name in ipairs(names) do
         local m = logic.calculateMaxBrews(name, recipes)
         if m > 0 then
-            table.insert(items, { text = name .. " ("..m..")", handler = function() brewQuantityMenu(name) end })
+            table.insert(items, { 
+                text = name:upper() .. " (" .. m .. ")", 
+                handler = function() brewQuantityMenu(name) end 
+            })
         end
     end
-    table.insert(items, { text = "Back", handler = function() mainMenu() end })
+    
+    table.insert(items, { text = "BACK", handler = mainMenu })
     ui.new("CRAFTABLE POTIONS", items):run()
 end
 
 -----------------------------------------------------------
--- 2. MISSING SUB-MENU
+-- SUB-MENU: Missing Ingredients
 -----------------------------------------------------------
 local function showMissingDetails(name)
     term.clear()
-    term.setCursorPos(1,2)
+    term.setCursorPos(1, 2)
     term.setTextColor(colors.yellow)
-    print("MISSING INGREDIENTS FOR: " .. name:upper())
+    print("RECIPE FOR: " .. name:upper())
     term.setTextColor(colors.white)
     
     local plan = logic.getBrewingPlan(name, recipes)
@@ -60,73 +112,87 @@ local function showMissingDetails(name)
         local count = logic.getStock(step.name)
         if count == 0 then
             term.setTextColor(colors.red)
-            print(" - " .. step.name .. ": MISSING")
+            print(" [X] " .. step.name)
         else
             term.setTextColor(colors.green)
-            print(" - " .. step.name .. ": OK ("..count..")")
+            print(" [OK] " .. step.name .. " (" .. count .. ")")
         end
     end
     
     print("\nPress any key to go back...")
     os.pullEvent("key")
+    mainMenu()
 end
 
 local function missingMenu()
     local items = {}
     for name, _ in pairs(recipes) do
         if logic.calculateMaxBrews(name, recipes) == 0 then
-            table.insert(items, { text = name, handler = function() showMissingDetails(name) end })
+            table.insert(items, { text = name:upper(), handler = function() showMissingDetails(name) end })
         end
     end
-    table.insert(items, { text = "Back", handler = function() mainMenu() end })
+    table.insert(items, { text = "BACK", handler = mainMenu })
     ui.new("UNCRAFTABLE", items):run()
 end
 
 -----------------------------------------------------------
--- 3. STATUS & ADMIN
+-- SUB-MENUS: Status & Admin
 -----------------------------------------------------------
 local function statusScreen()
     term.clear()
-    term.setCursorPos(1,2)
-    print("STOCK LEVELS:")
-    print("Water: " .. logic.getStock("_water"))
-    print("Awkward: " .. logic.getStock("_awkward"))
-    print("Fuel: " .. logic.getStock("minecraft:blaze_powder"))
-    print("\nPress any key...")
+    term.setCursorPos(1, 2)
+    term.setTextColor(colors.yellow)
+    print("-- SYSTEM STATUS --")
+    term.setTextColor(colors.white)
+    print("Water:    " .. logic.getStock("_water"))
+    print("Awkward:  " .. logic.getStock("_awkward"))
+    print("Blaze:    " .. logic.getStock("minecraft:blaze_powder"))
+    print("Bottles:  " .. logic.getStock("minecraft:glass_bottle"))
+    print("\nPress any key to return...")
     os.pullEvent("key")
     mainMenu()
 end
 
 local function adminMenu()
     local items = {
-        { text = "Global Eject", handler = function() logic.globalEject(chest, stand, tName) end },
-        { text = "Back", handler = function() mainMenu() end }
+        { text = "GLOBAL EJECT", handler = function() 
+            print("Ejecting all inventories...")
+            logic.globalEject(chest, stand, tName) 
+            os.sleep(1)
+            mainMenu()
+        end },
+        { text = "BACK", handler = mainMenu }
     }
     ui.new("ADMIN TOOLS", items):run()
 end
 
 -----------------------------------------------------------
--- MAIN MENU ORCHESTRATOR
+-- MAIN MENU & PARALLEL TASKS
 -----------------------------------------------------------
 function mainMenu()
     local items = {
-        { text = "Brew", handler = craftableMenu },
-        { text = "Missing", handler = missingMenu },
-        { text = "Status", handler = statusScreen },
-        { text = "Admin Tools", handler = adminMenu }
+        { text = "BREW", handler = craftableMenu },
+        { text = "MISSING", handler = missingMenu },
+        { text = "STATUS", handler = statusScreen },
+        { text = "ADMIN TOOLS", handler = adminMenu }
     }
-    ui.new("ALCH-OS v3.0", items):run()
+    ui.new("ALCH-OS v3.5", items):run()
 end
 
--- Core Background task (Logic & Maintenance)
 local function backgroundWorker()
     while true do
         logic.updateSnapshot(chest)
         if not isBrewing then
+            -- Maintenance
             logic.fillWaterBottles(chest, tName)
             logic.manageFuel(chest, stand)
+            
+            -- Auto-Crafting (Rods & Glass)
+            if logic.getStock("minecraft:blaze_powder") < 5 then logic.craftBlazePowder(chest, tName) end
+            if logic.getStock("minecraft:glass_bottle") < 6 then logic.craftBottles(chest, tName) end
+            
             -- Simple Sorter
-            local keepers = {["minecraft:potion"]=true, ["minecraft:glass_bottle"]=true, ["minecraft:blaze_powder"]=true, ["minecraft:nether_wart"]=true}
+            local keepers = {["minecraft:potion"]=true, ["minecraft:glass_bottle"]=true, ["minecraft:blaze_powder"]=true, ["minecraft:nether_wart"]=true, ["minecraft:glass"]=true, ["minecraft:blaze_rod"]=true}
             for _, r in pairs(recipes) do keepers[r.ingredient] = true end
             for i=1, 16 do
                 local itm = turtle.getItemDetail(i)
@@ -137,7 +203,9 @@ local function backgroundWorker()
     end
 end
 
--- Start both
+-- Launch System
 parallel.waitForAny(backgroundWorker, function()
-    while true do mainMenu() end
+    while true do 
+        mainMenu() 
+    end
 end)
