@@ -8,10 +8,10 @@ local modem = peripheral.find("modem")
 local tName = modem and modem.getNameLocal() or "turtle"
 local isBrewing = false
 
--- BOOT SEQUENCE: Clear state and cache
+-- BOOT: Force scan
 term.clear()
 term.setCursorPos(1,1)
-print("ALCH-OS: Initializing...")
+print("ALCH-OS: Synchronizing Inventory...")
 logic.updateSnapshot(chest)
 
 local mainMenu, craftableMenu, missingMenu, statusScreen, adminMenu
@@ -25,17 +25,13 @@ local function executeBrew(name, amt, silent)
             term.setCursorPos(1, 2)
             print("-- ORDER: " .. name:upper() .. " (" .. b .. "/" .. amt .. ") --")
         end
-
         logic.purgeStand(stand, tName, chest)
-        
         local hasAwkward = (logic.getStock("_awkward") >= 3 and name ~= "awkward")
         local startType = hasAwkward and "awkward" or "water"
-        
         for s = 1, 3 do 
             local bSlot = logic.findInChest(chest, "minecraft:potion", startType)
             if bSlot then chest.pushItems(peripheral.getName(stand), bSlot, 1, s) end
         end
-
         for _, step in ipairs(plan) do
             if not (startType == "awkward" and step.name == "minecraft:nether_wart") then
                 local ing = logic.findInChest(chest, step.name)
@@ -46,7 +42,6 @@ local function executeBrew(name, amt, silent)
                 end
             end
         end
-        
         for s = 1, 3 do stand.pushItems(tName, s, 1) end
         for i = 1, 16 do if turtle.getItemCount(i) > 0 then chest.pullItems(tName, i) end end
     end
@@ -149,8 +144,6 @@ local function backgroundWorker()
             end
             logic.fillWaterBottles(chest, tName)
             logic.manageFuel(chest, stand)
-            
-            -- FIX: Check for nil/export here
             if logic.getStock("minecraft:blaze_powder") < 5 then logic.craftBlazePowder(chest, tName) end
             if logic.getStock("minecraft:glass_bottle") < 6 then logic.craftBottles(chest, tName) end
             
