@@ -192,3 +192,4 @@ function logic.globalEject(chest, stand, tName)
 end
 
 return logic
+--darth
