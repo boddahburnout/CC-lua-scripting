@@ -1,13 +1,32 @@
 local logic = {}
 local cachedTotals = {}
 
+-- 1. IDENTIFICATION: Stronger NBT/Component Detection
 function logic.getPotionType(detail)
     if not detail or detail.name ~= "minecraft:potion" then return "not_a_potion" end
+    -- Check for 1.20.5+ Components or older NBT tags
     local p = (detail.components and detail.components["minecraft:potion_contents"] and detail.components["minecraft:potion_contents"].type) or
               (detail.nbt and detail.nbt.Potion)
-    return p or "minecraft:water"
+    
+    return p or "minecraft:water" -- Default to water
 end
 
+-- 2. RESET: Clear the Stand entirely to prevent jams
+function logic.purgeStand(stand, tName, chest)
+    -- Pull everything from the stand's 5 slots (Bottles, Ingredient, Fuel)
+    for s = 1, 5 do
+        stand.pushItems(tName, s, 64)
+    end
+    -- Immediately dump those items from Turtle to Chest to keep Turtle empty
+    for i = 1, 16 do
+        if turtle.getItemCount(i) > 0 then
+            turtle.select(i)
+            chest.pullItems(tName, i)
+        end
+    end
+end
+
+-- 3. SNAPSHOT: Deep-scan with bucket separation
 function logic.updateSnapshot(chest)
     local success, inventory = pcall(chest.list)
     if not success then return {}, {} end
@@ -29,6 +48,7 @@ end
 
 function logic.getStock(itemName) return cachedTotals[itemName] or 0 end
 
+-- 4. SEARCH: Strict NBT matching for Water vs Awkward
 function logic.findInChest(chest, itemName, reqType)
     local _, inv = logic.updateSnapshot(chest)
     for slot, item in pairs(inv) do
@@ -42,6 +62,7 @@ function logic.findInChest(chest, itemName, reqType)
     return nil
 end
 
+-- 5. BREWING LOGIC
 function logic.getBrewingPlan(potionName, recipes)
     local plan, current = {}, potionName
     while current ~= "minecraft:water" do
@@ -54,16 +75,14 @@ function logic.getBrewingPlan(potionName, recipes)
 end
 
 function logic.calculateMaxBrews(potionName, recipes)
-    if potionName == "awkward" then return 0 end -- Hide from UI
+    if potionName == "awkward" then return 0 end
     local plan = logic.getBrewingPlan(potionName, recipes)
     if not plan or #plan == 0 then return 0 end
     
-    -- Total starts = (Water + Empty Bottles + Existing Awkward)
     local startBottles = logic.getStock("_water") + logic.getStock("minecraft:glass_bottle") + logic.getStock("_awkward")
     local m = math.floor(startBottles / 3)
     
     for _, step in ipairs(plan) do
-        -- Skip Nether Wart check if we have pre-brewed Awkward potions
         if not (step.name == "minecraft:nether_wart" and logic.getStock("_awkward") >= 3) then
             m = math.min(m, logic.getStock(step.name))
         end
@@ -71,6 +90,7 @@ function logic.calculateMaxBrews(potionName, recipes)
     return m
 end
 
+-- 6. MAINTENANCE
 function logic.fillWaterBottles(chest, tName)
     local empty = logic.findInChest(chest, "minecraft:glass_bottle")
     if empty then
