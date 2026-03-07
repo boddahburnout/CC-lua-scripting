@@ -1,211 +1,194 @@
-local recipes = require("recipes")
-local logic = require("logic")
-local ui = require("ui")
+local logic = {}
+local cachedTotals = {}
 
-if not logic then error("logic.lua missing") end
+function logic.getPotionType(detail)
+    if not detail or detail.name ~= "minecraft:potion" then return "not_a_potion" end
+    local name = detail.displayName or ""
+    if name == "Water Bottle" then return "water" end
+    if name == "Awkward Potion" then return "awkward" end
+    return "final_potion"
+end
 
-local chest = peripheral.find("minecraft:chest")
-local stand = peripheral.find("minecraft:brewing_stand")
-local mon = peripheral.find("monitor")
-local modem = peripheral.find("modem")
-local tName = modem and modem.getNameLocal() or "turtle"
-local isBrewing = false
+function logic.purgeStand(stand, tName, chest)
+    for s = 1, 5 do stand.pushItems(tName, s, 64) end
+    for i = 1, 16 do
+        if turtle.getItemCount(i) > 0 then
+            local d = turtle.getItemDetail(i)
+            if d and logic.getPotionType(d) == "awkward" then
+                turtle.select(i)
+                chest.pullItems(tName, i)
+            end
+        end
+    end
+end
 
-term.clear()
-term.setCursorPos(1,1)
-print("ALCH-OS: Syncing...")
-logic.updateSnapshot(chest)
-
-local mainMenu, craftableMenu, missingMenu, statusScreen, adminMenu
-
-local function executeBrew(name, amt, silent)
-    isBrewing = true
-    local plan = logic.getBrewingPlan(name, recipes)
+-- NEW: Explicit cleanup for non-potion utility items
+function logic.cleanupInventory(chest, tName, recipes)
+    local k = {["minecraft:glass_bottle"]=true, ["minecraft:blaze_powder"]=true, ["minecraft:nether_wart"]=true, ["minecraft:glass"]=true, ["minecraft:blaze_rod"]=true}
+    for _, r in pairs(recipes) do k[r.ingredient] = true end
     
-    for b = 1, amt do
-        if not silent then
-            term.clear()
-            term.setCursorPos(1, 2)
-            print("ORDER: " .. name:upper() .. " (" .. b .. "/" .. amt .. ")")
-        end
-
-        logic.purgeStand(stand, tName, chest)
-        
-        local hasAwkward = (logic.getStock("_awkward") >= 3 and name ~= "awkward")
-        local startType = hasAwkward and "awkward" or "water"
-        
-        for s = 1, 3 do 
-            local bSlot = logic.findInChest(chest, "minecraft:potion", startType)
-            if bSlot then chest.pushItems(peripheral.getName(stand), bSlot, 1, s) end
-        end
-
-        for _, step in ipairs(plan) do
-            if not (startType == "awkward" and step.name == "minecraft:nether_wart") then
-                local ing = logic.findInChest(chest, step.name)
-                if ing then 
-                    if not silent then print(" + Adding " .. step.name) end
-                    chest.pushItems(peripheral.getName(stand), ing, 1, 4)
-                    os.sleep(22)
-                end
+    for i = 1, 16 do
+        local itm = turtle.getItemDetail(i)
+        if itm then
+            local pType = logic.getPotionType(itm)
+            -- ONLY move if it's an ingredient or an Awkward potion
+            if k[itm.name] or pType == "awkward" then
+                turtle.select(i)
+                chest.pullItems(tName, i)
+            elseif pType == "not_a_potion" then
+                -- Toss actual junk (dirt, cobble, etc)
+                turtle.select(i)
+                turtle.dropDown()
             end
+            -- Final Potions are IGNORRED and stay in the turtle
         end
-        
-        for s = 1, 3 do stand.pushItems(tName, s, 1) end
-        
-        -- If it's awkward or the turtle is full, put it in the chest
-        if name == "awkward" or turtle.getItemCount(16) > 0 then
-            for i = 1, 16 do 
-                if turtle.getItemCount(i) > 0 then chest.pullItems(tName, i) end 
-            end
-        else
-            if not silent then 
-                term.setTextColor(colors.green)
-                print("Order Ready!") 
-                term.setTextColor(colors.white)
-            end
-        end
-    end
-    
-    isBrewing = false
-    if not silent then mainMenu() end
-end
-
-local function brewQuantityMenu(name)
-    local max = logic.calculateMaxBrews(name, recipes)
-    local items = {
-        { text = "START", handler = function()
-            term.clear()
-            term.setCursorPos(1, 2)
-            print("Qty (Max " .. max .. "):")
-            local q = tonumber(read())
-            if q and q > 0 and q <= max then executeBrew(name, q) else mainMenu() end
-        end},
-        { text = "BACK", handler = function() craftableMenu() end }
-    }
-    ui.new(name:upper(), items):run()
-end
-
-function craftableMenu()
-    local items = {}
-    local names = {}
-    for n in pairs(recipes) do if n ~= "awkward" then table.insert(names, n) end end
-    table.sort(names)
-    for _, n in ipairs(names) do
-        local m = logic.calculateMaxBrews(n, recipes)
-        if m > 0 then
-            table.insert(items, { 
-                text = n:upper() .. " (" .. m .. ")", 
-                handler = function() brewQuantityMenu(n) end 
-            })
-        end
-    end
-    table.insert(items, { text = "BACK", handler = function() mainMenu() end })
-    ui.new("CRAFTABLE", items):run()
-end
-
-function missingMenu()
-    local items = {}
-    for n, _ in pairs(recipes) do
-        if n ~= "awkward" and logic.calculateMaxBrews(n, recipes) == 0 then
-            table.insert(items, { text = n:upper(), handler = function() 
-                term.clear()
-                print("RECIPE: " .. n:upper())
-                local p = logic.getBrewingPlan(n, recipes)
-                for _, s in ipairs(p) do
-                    local c = logic.getStock(s.name)
-                    term.setTextColor(c == 0 and colors.red or colors.green)
-                    print(" [" .. (c == 0 and "X" or "OK") .. "] " .. s.name)
-                end
-                term.setTextColor(colors.white)
-                print("\nPress any key...")
-                os.pullEvent("key")
-                missingMenu()
-            end })
-        end
-    end
-    table.insert(items, { text = "BACK", handler = function() mainMenu() end })
-    ui.new("UNCRAFTABLE", items):run()
-end
-
-function statusScreen()
-    term.clear()
-    term.setCursorPos(1, 2)
-    print("STATUS:")
-    print("Water:   " .. logic.getStock("_water"))
-    print("Awkward: " .. logic.getStock("_awkward"))
-    print("Fuel:    " .. logic.getStock("minecraft:blaze_powder"))
-    print("\nAny key...")
-    os.pullEvent("key")
-    mainMenu()
-end
-
-function adminMenu()
-    local items = {
-        { text = "EJECT ALL", handler = function() logic.globalEject(chest, stand, tName) mainMenu() end },
-        { text = "BACK", handler = function() mainMenu() end }
-    }
-    ui.new("ADMIN", items):run()
-end
-
-function mainMenu()
-    local items = {
-        { text = "BREW", handler = function() craftableMenu() end },
-        { text = "MISSING", handler = function() missingMenu() end },
-        { text = "STATUS", handler = function() statusScreen() end },
-        { text = "ADMIN", handler = function() adminMenu() end }
-    }
-    ui.new("ALCH-OS v3.8", items):run()
-end
-
-local function backgroundWorker()
-    while true do
-        logic.updateSnapshot(chest)
-        logic.displayStatus(mon, recipes)
-        
-        if not isBrewing then
-            if logic.getStock("_awkward") < 15 then
-                local can = logic.getStock("minecraft:nether_wart") > 0 and 
-                            (logic.getStock("_water") + logic.getStock("minecraft:glass_bottle")) >= 3
-                if can then executeBrew("awkward", 1, true) end
-            end
-            logic.fillWaterBottles(chest, tName)
-            logic.manageFuel(chest, stand)
-            if logic.getStock("minecraft:blaze_powder") < 5 then logic.craftBlazePowder(chest, tName) end
-            if logic.getStock("minecraft:glass_bottle") < 6 then logic.craftBottles(chest, tName) end
-            
-            local k = {["minecraft:glass_bottle"]=true, ["minecraft:blaze_powder"]=true, ["minecraft:nether_wart"]=true, ["minecraft:glass"]=true, ["minecraft:blaze_rod"]=true}
-            for _, r in pairs(recipes) do k[r.ingredient] = true end
-            
-            for i = 1, 16 do
-                local itm = turtle.getItemDetail(i)
-                if itm then
-                    local pType = logic.getPotionType(itm)
-                    
-                    -- RULE 1: If it's a keeper (Glass, Blaze, etc.), store it.
-                    if k[itm.name] then
-                        turtle.select(i)
-                        chest.pullItems(tName, i)
-                        
-                    -- RULE 2: If it's a potion, ONLY store if it's "Awkward Potion".
-                    elseif itm.name == "minecraft:potion" then
-                        if pType == "awkward" then
-                            turtle.select(i)
-                            chest.pullItems(tName, i)
-                        end
-                        -- If it's ANY other potion, the loop just SKIPS it.
-                        
-                    -- RULE 3: If it's anything else, toss it.
-                    else
-                        turtle.select(i)
-                        turtle.dropDown()
-                    end
-                end
-            end
-        end
-        os.sleep(5)
     end
 end
 
-parallel.waitForAny(backgroundWorker, function()
-    while true do mainMenu() end
-end)
+function logic.updateSnapshot(chest)
+    local success, inventory = pcall(chest.list)
+    if not success then return {}, {} end
+    local totals, water, awkward = {}, 0, 0
+    for slot, item in pairs(inventory) do
+        totals[item.name] = (totals[item.name] or 0) + item.count
+        if item.name == "minecraft:potion" then
+            local d = chest.getItemDetail(slot)
+            local pType = logic.getPotionType(d)
+            if pType == "water" then water = water + item.count
+            elseif pType == "awkward" then awkward = awkward + item.count end
+        end
+    end
+    cachedTotals = totals
+    cachedTotals["_water"] = water
+    cachedTotals["_awkward"] = awkward
+    return totals, inventory
+end
+
+function logic.getStock(itemName) return cachedTotals[itemName] or 0 end
+
+function logic.findInChest(chest, itemName, reqType)
+    local success, inv = pcall(chest.list)
+    if not success then return nil end
+    for slot, item in pairs(inv) do
+        if item.name == itemName then
+            if reqType then
+                local d = chest.getItemDetail(slot)
+                if logic.getPotionType(d) == reqType then return slot end
+            else return slot end
+        end
+    end
+    return nil
+end
+
+function logic.getBrewingPlan(potionName, recipes)
+    local plan, current = {}, potionName
+    while current ~= "minecraft:water" do
+        local step = recipes[current]
+        if not step then break end
+        table.insert(plan, 1, {name = step.ingredient, result = current})
+        current = step.base
+    end
+    return plan
+end
+
+function logic.calculateMaxBrews(potionName, recipes)
+    if potionName == "awkward" then return 0 end
+    local plan = logic.getBrewingPlan(potionName, recipes)
+    if not plan or #plan == 0 then return 0 end
+    local startBottles = logic.getStock("_water") + logic.getStock("minecraft:glass_bottle") + logic.getStock("_awkward")
+    local m = math.floor(startBottles / 3)
+    for _, step in ipairs(plan) do
+        if not (step.name == "minecraft:nether_wart" and logic.getStock("_awkward") >= 3) then
+            m = math.min(m, logic.getStock(step.name))
+        end
+    end
+    return m
+end
+
+function logic.displayStatus(mon, recipes)
+    if not mon then return end
+    mon.clear()
+    local w, h = mon.getSize()
+    local mid = math.floor(w / 2)
+    mon.setCursorPos(1, 1)
+    mon.setTextColor(colors.yellow)
+    mon.write("STOCK")
+    mon.setCursorPos(mid + 2, 1)
+    mon.write("MISSING")
+    mon.setTextColor(colors.gray)
+    for y = 1, h do mon.setCursorPos(mid + 1, y) mon.write("|") end
+    mon.setTextColor(colors.white)
+    local essentials = {["Water"]="_water", ["Awkward"]="_awkward", ["Fuel"]="minecraft:blaze_powder", ["Wart"]="minecraft:nether_wart"}
+    local y = 3
+    for label, key in pairs(essentials) do
+        mon.setCursorPos(2, y)
+        mon.write(label .. ": " .. logic.getStock(key))
+        y = y + 1
+    end
+    mon.setTextColor(colors.red)
+    y = 3
+    local seen = {}
+    for _, r in pairs(recipes) do
+        if not seen[r.ingredient] and logic.getStock(r.ingredient) == 0 then
+            if y < h then
+                mon.setCursorPos(mid + 3, y)
+                local shortName = r.ingredient:gsub("minecraft:", "")
+                mon.write("- " .. shortName:sub(1, mid - 4))
+                y = y + 1
+                seen[r.ingredient] = true
+            end
+        end
+    end
+end
+
+function logic.fillWaterBottles(chest, tName)
+    if logic.getStock("_water") >= 20 then return end 
+    local empty = logic.findInChest(chest, "minecraft:glass_bottle")
+    if empty then
+        chest.pushItems(tName, empty, 16, 1)
+        turtle.select(1)
+        for i=1, 16 do if turtle.placeDown() then os.sleep(0.1) end end
+    end
+end
+
+function logic.manageFuel(chest, stand)
+    local p = logic.findInChest(chest, "minecraft:blaze_powder")
+    if p then
+        local f = stand.getItemDetail(5)
+        if not f or f.count < 10 then chest.pushItems(peripheral.getName(stand), p, 5, 5) end
+    end
+end
+
+function logic.craftBlazePowder(chest, tName)
+    local rSlot = logic.findInChest(chest, "minecraft:blaze_rod")
+    if rSlot then
+        chest.pushItems(tName, rSlot, 1, 1)
+        turtle.select(1)
+        return turtle.craft()
+    end
+end
+
+function logic.craftBottles(chest, tName)
+    local gSlot = logic.findInChest(chest, "minecraft:glass")
+    if gSlot and logic.getStock("minecraft:glass") >= 3 then
+        chest.pushItems(tName, gSlot, 1, 1)
+        chest.pushItems(tName, gSlot, 1, 3)
+        chest.pushItems(tName, gSlot, 1, 6)
+        return turtle.craft()
+    end
+end
+
+function logic.globalEject(chest, stand, tName)
+    local periphs = {chest, stand}
+    for _, p in ipairs(periphs) do
+        if p then
+            for slot, _ in pairs(p.list()) do
+                p.pushItems(tName, slot, 64, 1)
+                turtle.select(1)
+                turtle.dropDown()
+            end
+        end
+    end
+end
+
+return logic
