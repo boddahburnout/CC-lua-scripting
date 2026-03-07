@@ -169,13 +169,23 @@ local function backgroundWorker()
             if logic.getStock("minecraft:blaze_powder") < 5 then logic.craftBlazePowder(chest, tName) end
             if logic.getStock("minecraft:glass_bottle") < 6 then logic.craftBottles(chest, tName) end
             
-            local k = {["minecraft:potion"]=true, ["minecraft:glass_bottle"]=true, ["minecraft:blaze_powder"]=true, ["minecraft:nether_wart"]=true, ["minecraft:glass"]=true, ["minecraft:blaze_rod"]=true}
+            local k = {["minecraft:glass_bottle"]=true, ["minecraft:blaze_powder"]=true, ["minecraft:nether_wart"]=true, ["minecraft:glass"]=true, ["minecraft:blaze_rod"]=true}
             for _, r in pairs(recipes) do k[r.ingredient] = true end
+            
             for i = 1, 16 do
                 local itm = turtle.getItemDetail(i)
                 if itm then
-                    if k[itm.name] then turtle.select(i) chest.pullItems(tName, i) 
-                    else turtle.select(i) turtle.dropDown() end
+                    local pType = logic.getPotionType(itm)
+                    -- MOVE TO CHEST IF: It's an ingredient OR it's specifically an Awkward Potion
+                    if k[itm.name] or pType == "awkward" then
+                        turtle.select(i)
+                        chest.pullItems(tName, i) 
+                    -- REJECT IF: It's not a potion at all (Junk)
+                    elseif pType == "not_a_potion" then
+                        turtle.select(i)
+                        turtle.dropDown()
+                    -- LEAVE ALONE IF: It's a "final_potion" (Strength, Invis, etc.)
+                    end
                 end
             end
         end
