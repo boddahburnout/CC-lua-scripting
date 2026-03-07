@@ -8,6 +8,11 @@ function ui.new(title, items)
         running = true
     }
 
+    -- 1. ADD THIS LINE HERE
+    function menu:stop()
+        self.running = false
+    end
+
     local w, h = term.getSize()
 
     -- Helper to center text
@@ -61,5 +66,6 @@ function ui.new(title, items)
 
     return menu
 end
+
 
 return ui
