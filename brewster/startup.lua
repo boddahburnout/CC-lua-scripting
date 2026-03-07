@@ -52,6 +52,7 @@ local function executeBrew(name, amt, silent)
         
         for s = 1, 3 do stand.pushItems(tName, s, 1) end
         
+        -- If it's awkward or the turtle is full, put it in the chest
         if name == "awkward" or turtle.getItemCount(16) > 0 then
             for i = 1, 16 do 
                 if turtle.getItemCount(i) > 0 then chest.pullItems(tName, i) end 
@@ -179,17 +180,24 @@ local function backgroundWorker()
                 local itm = turtle.getItemDetail(i)
                 if itm then
                     local pType = logic.getPotionType(itm)
-                    -- Sorter Logic:
-                    -- 1. If it's an ingredient or Awkward Potion, put it in the chest.
-                    if k[itm.name] or pType == "awkward" then
+                    
+                    -- RULE 1: If it's a keeper (Glass, Blaze, etc.), store it.
+                    if k[itm.name] then
                         turtle.select(i)
-                        chest.pullItems(tName, i) 
-                    -- 2. If it is NOT a potion at all, toss it out.
-                    elseif pType == "not_a_potion" then
+                        chest.pullItems(tName, i)
+                        
+                    -- RULE 2: If it's a potion, ONLY store if it's "Awkward Potion".
+                    elseif itm.name == "minecraft:potion" then
+                        if pType == "awkward" then
+                            turtle.select(i)
+                            chest.pullItems(tName, i)
+                        end
+                        -- If it's ANY other potion, the loop just SKIPS it.
+                        
+                    -- RULE 3: If it's anything else, toss it.
+                    else
                         turtle.select(i)
                         turtle.dropDown()
-                    -- 3. If it is a "final_potion", DO NOTHING. 
-                    -- This leaves it in the turtle for the player.
                     end
                 end
             end
