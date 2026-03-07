@@ -1,25 +1,21 @@
 local logic = {}
 local cachedTotals = {}
 
--- 1. IDENTIFICATION: Priority on Display Name for reliability
+-- 1. IDENTIFICATION: Verified Strings from inspect.lua
 function logic.getPotionType(detail)
     if not detail or detail.name ~= "minecraft:potion" then return "not_a_potion" end
-    
     local name = detail.displayName or ""
     
-    -- Strict String Matching
-    if name:find("Water Bottle") then return "water" end
-    if name:find("Awkward Potion") then return "awkward" end
+    -- Exact matches based on your inspection
+    if name == "Water Bottle" then return "water" end
+    if name == "Awkward Potion" then return "awkward" end
     
-    -- If it's a potion but doesn't match the strings above, it's a "Final Potion"
     return "final_potion"
 end
 
--- 2. RESET: Clear the Stand entirely to prevent jams
+-- 2. RESET: Clear Stand and Turtle completely
 function logic.purgeStand(stand, tName, chest)
-    for s = 1, 5 do
-        stand.pushItems(tName, s, 64)
-    end
+    for s = 1, 5 do stand.pushItems(tName, s, 64) end
     for i = 1, 16 do
         if turtle.getItemCount(i) > 0 then
             turtle.select(i)
@@ -28,50 +24,40 @@ function logic.purgeStand(stand, tName, chest)
     end
 end
 
--- 3. SNAPSHOT: Deep-scan with Name-based buckets
+-- 3. SNAPSHOT: Deep-scan for UI Counts
 function logic.updateSnapshot(chest)
     local success, inventory = pcall(chest.list)
     if not success then return {}, {} end
-    local totals, realWater, awkward = {}, 0, 0
+    local totals, water, awkward = {}, 0, 0
     
     for slot, item in pairs(inventory) do
         totals[item.name] = (totals[item.name] or 0) + item.count
-        
         if item.name == "minecraft:potion" then
             local d = chest.getItemDetail(slot)
             local pType = logic.getPotionType(d)
-            if pType == "water" then realWater = realWater + item.count
+            if pType == "water" then water = water + item.count
             elseif pType == "awkward" then awkward = awkward + item.count end
         end
     end
     
     cachedTotals = totals
-    cachedTotals["_water"] = realWater
+    cachedTotals["_water"] = water
     cachedTotals["_awkward"] = awkward
     return totals, inventory
 end
 
 function logic.getStock(itemName) return cachedTotals[itemName] or 0 end
 
--- 4. SEARCH: The "Display Name" Lock
+-- 4. SEARCH: The "Zero-Latency" Search
 function logic.findInChest(chest, itemName, reqType)
     local success, inv = pcall(chest.list)
     if not success then return nil end
-    
     for slot, item in pairs(inv) do
         if item.name == itemName then
-            -- If we need a specific type (water vs awkward)
             if reqType then
                 local d = chest.getItemDetail(slot)
-                local currentType = logic.getPotionType(d)
-                
-                -- The "Gold Standard" check: Strings must match
-                if currentType == reqType then 
-                    return slot 
-                end
-            else 
-                return slot 
-            end
+                if logic.getPotionType(d) == reqType then return slot end
+            else return slot end
         end
     end
     return nil
@@ -93,6 +79,7 @@ function logic.calculateMaxBrews(potionName, recipes)
     local plan = logic.getBrewingPlan(potionName, recipes)
     if not plan or #plan == 0 then return 0 end
     
+    -- Math: (Water + Empty + Awkward) / 3
     local startBottles = logic.getStock("_water") + logic.getStock("minecraft:glass_bottle") + logic.getStock("_awkward")
     local m = math.floor(startBottles / 3)
     
@@ -104,6 +91,7 @@ function logic.calculateMaxBrews(potionName, recipes)
     return m
 end
 
+-- MAINTENANCE UTILS
 function logic.fillWaterBottles(chest, tName)
     local empty = logic.findInChest(chest, "minecraft:glass_bottle")
     if empty then
@@ -126,16 +114,6 @@ function logic.craftBlazePowder(chest, tName)
     if rSlot then
         chest.pushItems(tName, rSlot, 1, 1)
         turtle.select(1)
-        return turtle.craft()
-    end
-end
-
-function logic.craftBottles(chest, tName)
-    local gSlot = logic.findInChest(chest, "minecraft:glass")
-    if gSlot and logic.getStock("minecraft:glass") >= 3 then
-        chest.pushItems(tName, gSlot, 1, 1)
-        chest.pushItems(tName, gSlot, 1, 3)
-        chest.pushItems(tName, gSlot, 1, 6)
         return turtle.craft()
     end
 end
