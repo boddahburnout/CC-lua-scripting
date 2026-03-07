@@ -6,6 +6,7 @@ if not logic then error("logic.lua missing") end
 
 local chest = peripheral.find("minecraft:chest")
 local stand = peripheral.find("minecraft:brewing_stand")
+local mon = peripheral.find("monitor")
 local modem = peripheral.find("modem")
 local tName = modem and modem.getNameLocal() or "turtle"
 local isBrewing = false
@@ -158,6 +159,8 @@ end
 local function backgroundWorker()
     while true do
         logic.updateSnapshot(chest)
+        logic.displayStatus(mon, recipes) -- REFRESH MONITOR
+        
         if not isBrewing then
             if logic.getStock("_awkward") < 15 then
                 local can = logic.getStock("minecraft:nether_wart") > 0 and 
@@ -176,15 +179,12 @@ local function backgroundWorker()
                 local itm = turtle.getItemDetail(i)
                 if itm then
                     local pType = logic.getPotionType(itm)
-                    -- MOVE TO CHEST IF: It's an ingredient OR it's specifically an Awkward Potion
                     if k[itm.name] or pType == "awkward" then
                         turtle.select(i)
                         chest.pullItems(tName, i) 
-                    -- REJECT IF: It's not a potion at all (Junk)
                     elseif pType == "not_a_potion" then
                         turtle.select(i)
                         turtle.dropDown()
-                    -- LEAVE ALONE IF: It's a "final_potion" (Strength, Invis, etc.)
                     end
                 end
             end
