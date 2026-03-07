@@ -10,9 +10,6 @@ local isBrewing = false
 
 local mainMenu, craftableMenu, missingMenu, statusScreen, adminMenu
 
------------------------------------------------------------
--- 1. THE REFINED BREWING ENGINE (Display-Name Hardened)
------------------------------------------------------------
 local function executeBrew(name, amt, silent)
     isBrewing = true
     local plan = logic.getBrewingPlan(name, recipes)
@@ -63,10 +60,6 @@ local function executeBrew(name, amt, silent)
     isBrewing = false
     if not silent then mainMenu() end
 end
-
------------------------------------------------------------
--- 2. UI MENUS (Using anonymous wrappers for safety)
------------------------------------------------------------
 
 local function brewQuantityMenu(name)
     local max = logic.calculateMaxBrews(name, recipes)
@@ -150,9 +143,6 @@ function mainMenu()
     ui.new("ALCH-OS v3.8", items):run()
 end
 
------------------------------------------------------------
--- 3. BACKGROUND WORKER
------------------------------------------------------------
 local function backgroundWorker()
     while true do
         logic.updateSnapshot(chest)
