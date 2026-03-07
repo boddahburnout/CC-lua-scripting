@@ -159,7 +159,7 @@ end
 local function backgroundWorker()
     while true do
         logic.updateSnapshot(chest)
-        logic.displayStatus(mon, recipes) -- REFRESH MONITOR
+        logic.displayStatus(mon, recipes)
         
         if not isBrewing then
             if logic.getStock("_awkward") < 15 then
@@ -179,12 +179,17 @@ local function backgroundWorker()
                 local itm = turtle.getItemDetail(i)
                 if itm then
                     local pType = logic.getPotionType(itm)
+                    -- Sorter Logic:
+                    -- 1. If it's an ingredient or Awkward Potion, put it in the chest.
                     if k[itm.name] or pType == "awkward" then
                         turtle.select(i)
                         chest.pullItems(tName, i) 
+                    -- 2. If it is NOT a potion at all, toss it out.
                     elseif pType == "not_a_potion" then
                         turtle.select(i)
                         turtle.dropDown()
+                    -- 3. If it is a "final_potion", DO NOTHING. 
+                    -- This leaves it in the turtle for the player.
                     end
                 end
             end
