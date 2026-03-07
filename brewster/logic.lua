@@ -1,14 +1,18 @@
 local logic = {}
 local cachedTotals = {}
 
--- 1. IDENTIFICATION: Stronger NBT/Component Detection
+-- 1. IDENTIFICATION: Priority on Display Name for reliability
 function logic.getPotionType(detail)
     if not detail or detail.name ~= "minecraft:potion" then return "not_a_potion" end
-    -- Support for 1.20.5+ Components or older NBT tags
-    local p = (detail.components and detail.components["minecraft:potion_contents"] and detail.components["minecraft:potion_contents"].type) or
-              (detail.nbt and detail.nbt.Potion)
     
-    return p or "minecraft:water" -- Default to water
+    local name = detail.displayName or ""
+    
+    -- Strict String Matching
+    if name:find("Water Bottle") then return "water" end
+    if name:find("Awkward Potion") then return "awkward" end
+    
+    -- If it's a potion but doesn't match the strings above, it's a "Final Potion"
+    return "final_potion"
 end
 
 -- 2. RESET: Clear the Stand entirely to prevent jams
@@ -24,7 +28,7 @@ function logic.purgeStand(stand, tName, chest)
     end
 end
 
--- 3. SNAPSHOT: Deep-scan with bucket separation
+-- 3. SNAPSHOT: Deep-scan with Name-based buckets
 function logic.updateSnapshot(chest)
     local success, inventory = pcall(chest.list)
     if not success then return {}, {} end
@@ -33,12 +37,11 @@ function logic.updateSnapshot(chest)
     for slot, item in pairs(inventory) do
         totals[item.name] = (totals[item.name] or 0) + item.count
         
-        -- We must check EVERY potion slot's NBT to get accurate UI counts
         if item.name == "minecraft:potion" then
             local d = chest.getItemDetail(slot)
             local pType = logic.getPotionType(d)
-            if pType == "minecraft:water" then realWater = realWater + item.count
-            elseif pType == "minecraft:awkward" then awkward = awkward + item.count end
+            if pType == "water" then realWater = realWater + item.count
+            elseif pType == "awkward" then awkward = awkward + item.count end
         end
     end
     
@@ -50,25 +53,23 @@ end
 
 function logic.getStock(itemName) return cachedTotals[itemName] or 0 end
 
--- 4. SEARCH: THE CRITICAL FIX
--- This now performs a Deep Check on the slot before returning it to the Turtle
+-- 4. SEARCH: The "Display Name" Lock
 function logic.findInChest(chest, itemName, reqType)
     local success, inv = pcall(chest.list)
     if not success then return nil end
     
     for slot, item in pairs(inv) do
         if item.name == itemName then
-            -- If we need a specific type (Water vs Awkward)
+            -- If we need a specific type (water vs awkward)
             if reqType then
                 local d = chest.getItemDetail(slot)
                 local currentType = logic.getPotionType(d)
                 
-                -- ONLY return the slot if it matches the requested type EXACTLY
+                -- The "Gold Standard" check: Strings must match
                 if currentType == reqType then 
                     return slot 
                 end
             else 
-                -- Not a potion, just a regular item
                 return slot 
             end
         end
@@ -103,7 +104,6 @@ function logic.calculateMaxBrews(potionName, recipes)
     return m
 end
 
--- MAINTENANCE
 function logic.fillWaterBottles(chest, tName)
     local empty = logic.findInChest(chest, "minecraft:glass_bottle")
     if empty then
