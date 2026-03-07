@@ -11,9 +11,6 @@ local isBrewing = false
 -- Forward declarations to handle circular menu calls
 local mainMenu, craftableMenu, missingMenu, statusScreen, adminMenu
 
------------------------------------------------------------
--- 1. THE REFINED BREWING ENGINE (No-Jam Version)
------------------------------------------------------------
 local function executeBrew(name, amt, silent)
     isBrewing = true
     local plan = logic.getBrewingPlan(name, recipes)
@@ -68,10 +65,6 @@ local function executeBrew(name, amt, silent)
     isBrewing = false
     if not silent then mainMenu() end
 end
-
------------------------------------------------------------
--- 2. UI MENUS (Scrollable & Safe)
------------------------------------------------------------
 
 local function brewQuantityMenu(name)
     local max = logic.calculateMaxBrews(name, recipes)
@@ -170,9 +163,6 @@ function mainMenu()
     ui.new("ALCH-OS v3.7", items):run()
 end
 
------------------------------------------------------------
--- 3. BACKGROUND WORKER (Auto-Stocking & Maintenance)
------------------------------------------------------------
 local function backgroundWorker()
     while true do
         logic.updateSnapshot(chest)
@@ -205,9 +195,6 @@ local function backgroundWorker()
     end
 end
 
------------------------------------------------------------
--- 4. BOOT ORCHESTRATOR
------------------------------------------------------------
 parallel.waitForAny(backgroundWorker, function()
     while true do mainMenu() end
 end)
