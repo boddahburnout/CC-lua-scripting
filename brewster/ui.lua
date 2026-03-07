@@ -70,10 +70,16 @@ function ui.new(title, items)
             elseif key == keys.down then
                 self.selected = self.selected < #self.items and self.selected + 1 or 1
             elseif key == keys.enter then
+                local item = self.items[self.selected]
+            if item and type(item.handler) == "function" then
                 term.clear()
                 term.setCursorPos(1, 1)
-                self.items[self.selected].handler()
+                item.handler() -- This is the call that was failing
                 self.running = false
+            else
+                -- Optional: Sound a beep or print a warning if handler is missing
+                os.queueEvent("fake_event") -- Just to keep the loop alive
+            end
             elseif key == keys.q then -- Added a 'quit' shortcut
                 self.running = false
             end
