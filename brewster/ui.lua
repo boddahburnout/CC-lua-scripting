@@ -3,38 +3,60 @@ local ui = {}
 function ui.new(title, items)
     local menu = {
         title = title or "Menu",
-        items = items, 
+        items = items,
         selected = 1,
+        offset = 0, -- Track scrolling
         running = true
     }
 
-    function menu:stop()
-        self.running = false
-    end
-
     local w, h = term.getSize()
-
-    local function drawCentered(text, y, bracket)
-        local display = bracket and "[  " .. text .. "  ]" or text
-        local x = math.floor((w - #display) / 2) + 1
-        term.setCursorPos(x, y)
-        term.write(display)
-    end
+    local maxDisplay = h - 6 -- Reserve space for Title and Header
 
     function menu:draw()
         term.clear()
-        term.setTextColor(colors.yellow)
-        drawCentered("-- " .. self.title .. " --", 2)
         
-        for i, item in ipairs(self.items) do
-            local y = 4 + i
-            if i == self.selected then
-                term.setTextColor(colors.white)
-                drawCentered(item.text, y, true)
-            else
-                term.setTextColor(colors.gray)
-                drawCentered(item.text, y, false)
+        -- Draw Title
+        term.setTextColor(colors.yellow)
+        local titleDisplay = "-- " .. self.title .. " --"
+        term.setCursorPos(math.floor((w - #titleDisplay) / 2) + 1, 2)
+        term.write(titleDisplay)
+        
+        -- Calculate Scroll Offset
+        -- If selection moves past the bottom of the window, scroll down
+        if self.selected > self.offset + maxDisplay then
+            self.offset = self.selected - maxDisplay
+        -- If selection moves above the top of the window, scroll up
+        elseif self.selected <= self.offset then
+            self.offset = self.selected - 1
+        end
+
+        -- Draw Items within the window
+        for i = 1, maxDisplay do
+            local itemIdx = i + self.offset
+            local item = self.items[itemIdx]
+            
+            if item then
+                local y = 4 + i
+                local isSelected = (itemIdx == self.selected)
+                
+                local display = isSelected and "[  " .. item.text .. "  ]" or item.text
+                local x = math.floor((w - #display) / 2) + 1
+                
+                term.setCursorPos(x, y)
+                term.setTextColor(isSelected and colors.white or colors.gray)
+                term.write(display)
             end
+        end
+        
+        -- Draw Scroll Indicators if needed
+        term.setTextColor(colors.orange)
+        if self.offset > 0 then
+            term.setCursorPos(w, 5)
+            term.write("^")
+        end
+        if self.offset + maxDisplay < #self.items then
+            term.setCursorPos(w, 4 + maxDisplay)
+            term.write("v")
         end
     end
 
@@ -42,6 +64,7 @@ function ui.new(title, items)
         while self.running do
             self:draw()
             local _, key = os.pullEvent("key")
+            
             if key == keys.up then
                 self.selected = self.selected > 1 and self.selected - 1 or #self.items
             elseif key == keys.down then
@@ -49,8 +72,10 @@ function ui.new(title, items)
             elseif key == keys.enter then
                 term.clear()
                 term.setCursorPos(1, 1)
-                self.items[self.selected].handler() -- Execute the handler
-                self.running = false 
+                self.items[self.selected].handler()
+                self.running = false
+            elseif key == keys.q then -- Added a 'quit' shortcut
+                self.running = false
             end
         end
     end
