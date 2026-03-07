@@ -1,6 +1,7 @@
 local logic = {}
 local cachedTotals = {}
 
+-- 1. IDENTIFICATION (Strict String Matching)
 function logic.getPotionType(detail)
     if not detail or detail.name ~= "minecraft:potion" then return "not_a_potion" end
     local name = detail.displayName or ""
@@ -9,6 +10,7 @@ function logic.getPotionType(detail)
     return "final_potion"
 end
 
+-- 2. RESET (Purge Stand/Turtle)
 function logic.purgeStand(stand, tName, chest)
     for s = 1, 5 do stand.pushItems(tName, s, 64) end
     for i = 1, 16 do
@@ -19,6 +21,7 @@ function logic.purgeStand(stand, tName, chest)
     end
 end
 
+-- 3. SNAPSHOT (Deep-Scan Cache)
 function logic.updateSnapshot(chest)
     local success, inventory = pcall(chest.list)
     if not success then return {}, {} end
@@ -40,6 +43,7 @@ end
 
 function logic.getStock(itemName) return cachedTotals[itemName] or 0 end
 
+-- 4. SEARCH (Identity Specific)
 function logic.findInChest(chest, itemName, reqType)
     local success, inv = pcall(chest.list)
     if not success then return nil end
@@ -54,6 +58,7 @@ function logic.findInChest(chest, itemName, reqType)
     return nil
 end
 
+-- 5. BREWING LOGIC
 function logic.getBrewingPlan(potionName, recipes)
     local plan, current = {}, potionName
     while current ~= "minecraft:water" do
@@ -79,9 +84,9 @@ function logic.calculateMaxBrews(potionName, recipes)
     return m
 end
 
--- FIX: Added a limit of 20 to prevent chest flooding
+-- 6. MAINTENANCE (Limit of 20 Water Bottles)
 function logic.fillWaterBottles(chest, tName)
-    if logic.getStock("_water") >= 20 then return end -- STOP if we have enough
+    if logic.getStock("_water") >= 20 then return end 
     local empty = logic.findInChest(chest, "minecraft:glass_bottle")
     if empty then
         chest.pushItems(tName, empty, 16, 1)
@@ -107,7 +112,6 @@ function logic.craftBlazePowder(chest, tName)
     end
 end
 
--- FIX: Ensure this is correctly exported
 function logic.craftBottles(chest, tName)
     local gSlot = logic.findInChest(chest, "minecraft:glass")
     if gSlot and logic.getStock("minecraft:glass") >= 3 then
