@@ -1,0 +1,23 @@
+term.clear()
+print("Creating directories")
+os.sleep(1)
+shell.execute("mkdir", "craft8")
+shell.execute("cd", "craft8")
+shell.execute("cd", "roms")
+term.clear()
+print("Downloading Craft8 files...")
+shell.execute("wget", "https://github.com/boddahburnout/CC-lua-scripting/raw/refs/heads/main/craft8/cpu.lua")
+shell.execute("wget", "https://github.com/boddahburnout/CC-lua-scripting/raw/refs/heads/main/craft8/display.lua")
+shell.execute("wget", "https://github.com/boddahburnout/CC-lua-scripting/raw/refs/heads/main/craft8/keyboard.lua")
+shell.execute("wget", "https://github.com/boddahburnout/CC-lua-scripting/raw/refs/heads/main/craft8/main.lua")
+shell.execute("wget", "https://github.com/boddahburnout/CC-lua-scripting/raw/refs/heads/main/craft8/memory.lua")
+
+shell.execute("cd", "roms")
+shell.execute("wget", "https://github.com/boddahburnout/CC-lua-scripting/raw/refs/heads/main/craft8/si.ch8")
+
+term.clear()
+print("Complete!")
+sleep(1)
+term.clear()
+shell.execute("craft8/main.lua", "craft8/roms/si.ch8")
+
