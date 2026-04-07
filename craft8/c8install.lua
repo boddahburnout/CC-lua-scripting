@@ -20,5 +20,6 @@ term.clear()
 print("Complete!")
 sleep(1)
 term.clear()
+shell.execute("cd", "..")
 shell.execute("main.lua", "craft8/roms/si.ch8")
 
