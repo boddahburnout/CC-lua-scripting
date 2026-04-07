@@ -11,6 +11,7 @@ shell.execute("wget", "https://github.com/boddahburnout/CC-lua-scripting/raw/ref
 shell.execute("wget", "https://github.com/boddahburnout/CC-lua-scripting/raw/refs/heads/main/craft8/keyboard.lua")
 shell.execute("wget", "https://github.com/boddahburnout/CC-lua-scripting/raw/refs/heads/main/craft8/main.lua")
 shell.execute("wget", "https://github.com/boddahburnout/CC-lua-scripting/raw/refs/heads/main/craft8/memory.lua")
+shell.execute("wget", "https://raw.githubusercontent.com/9551-Dev/pixelbox_lite/master/pixelbox_lite.lua")
 
 shell.execute("cd", "roms")
 shell.execute("wget", "https://github.com/boddahburnout/CC-lua-scripting/raw/refs/heads/main/craft8/si.ch8")
@@ -19,5 +20,5 @@ term.clear()
 print("Complete!")
 sleep(1)
 term.clear()
-shell.execute("craft8/main.lua", "craft8/roms/si.ch8")
+shell.execute("main.lua", "craft8/roms/si.ch8")
 
